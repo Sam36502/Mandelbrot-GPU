@@ -1,0 +1,75 @@
+#version 450
+#extension NV_shader_atomic_float64 : enable
+
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 0, rgba32f) uniform image2D tex;
+
+layout(location = 0) uniform dvec3 view_window;
+layout(location = 1) uniform uint iterations;
+
+
+//	Transform screen space coordinates into a complex number
+//	including translation & zoom from the view window
+//	
+dvec2 complex_from_coords(vec2 coords);
+
+//	Squares a complex number
+//	
+dvec2 complex_square(dvec2 c);
+
+//	Calculates the distance a complex number is from 0,0
+//	
+double dist_from_origin(dvec2 c);
+
+//	Fetches the colour from a spectrum for a given iteration level
+//	
+vec4 iter_colour(float iter_lvl);
+
+void main() {
+
+	vec2 coords = vec2(gl_WorkGroupID.xy);
+	dvec2 Z = complex_from_coords(coords);
+	dvec2 C = Z;
+
+	// Perform mandelbrot iterations;
+	vec4 clr = vec4(0.0, 0.0, 0.0, 1.0);
+	for (int i=0; i<iterations; i++) {
+		Z = complex_square(Z) + C;
+
+		if (dist_from_origin(Z) > 2.0) {
+			clr = iter_colour(float(i) / float(iterations));
+			break;
+		}
+	}
+
+	imageStore(tex, ivec2(gl_WorkGroupID.xy), clr);
+}
+
+dvec2 complex_from_coords(vec2 coords) {
+	dvec2 c = coords - dvec2(gl_NumWorkGroups) / 2;
+	c.x = c.x / view_window.z + view_window.x;
+	c.y = c.y / view_window.z + view_window.y;
+	return c;
+}
+
+dvec2 complex_square(dvec2 c) {
+	double x = c.x * c.x - c.y * c.y;
+	double y = 2.0 * c.x * c.y;
+	return dvec2(x, y);
+}
+
+double dist_from_origin(dvec2 c) {
+	return sqrt(c.x * c.x + c.y * c.y);	// Uses pythagoras for distance
+}
+
+vec4 iter_colour(float iter_lvl) {
+	// Greyscale
+	//return vec4(iter_lvl, iter_lvl, iter_lvl, 1.0);
+
+	float red = iter_lvl;
+	float green = abs(iter_lvl - 0.5);
+	float blue = (-iter_lvl) + 1.0;
+
+	return vec4(red, green, blue, 1.0);
+}
